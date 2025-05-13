@@ -1,23 +1,17 @@
-import cv2
+import streamlit as st
+from PIL import Image
 import numpy as np
-import pandas as pd
 
-def preprocess_image(image_path):
-    # Membaca gambar
-    img = cv2.imread(image_path)
-    
-    # Mengubah ukuran gambar jika diperlukan
-    img = cv2.resize(img, (48, 48))
-    
-    # Mengubah gambar ke grayscale
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    # Normalisasi gambar (nilai pixel antara 0 dan 1)
-    img = img / 255.0
-    
-    return np.expand_dims(img, axis=-1)  # Menambah dimensi untuk kompatibilitas model
+uploaded_file = st.file_uploader("Upload gambar wajah", type=["jpg", "png", "jpeg"])
 
-def load_data(csv_path):
-    # Misalnya, memuat data CSV dengan informasi gambar dan label
-    df = pd.read_csv(csv_path)
-    return df
+if uploaded_file is not None:
+    image = Image.open(uploaded_file).convert('L')  # Konversi ke grayscale
+    st.image(image, caption='Gambar yang Diupload', width=300)
+
+    # Resize dan konversi ke array numpy
+    img = image.resize((48, 48))  # Resize gambar sesuai ukuran yang diperlukan
+    img_array = np.array(img) / 255.0  # Normalisasi
+
+    img_array = img_array.reshape(1, 48, 48, 1)  # Tambahkan dimensi untuk kompatibilitas model
+
+    # Lakukan prediksi atau proses lainnya
