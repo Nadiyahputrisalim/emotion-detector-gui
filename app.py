@@ -5,7 +5,8 @@ from PIL import Image, ImageOps
 import cv2
 
 # Load model
-model = load_model("model_emosi.h5")
+model = load_model("models/model_emosi.h5")
+
 
 # Label emosi sesuai dataset
 labels = ['Marah', 'Jijik', 'Takut', 'Senang', 'Sedih', 'Kaget', 'Netral']
