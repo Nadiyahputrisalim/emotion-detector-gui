@@ -1,14 +1,18 @@
 import sqlite3
 
-def connect_db(db_name):
-    # Koneksi ke database SQLite
-    conn = sqlite3.connect(db_name)
-    return conn
+def connect_db(db_name="emotion_database.db"):
+    return sqlite3.connect(db_name)
 
-def fetch_emotions(conn):
-    # Mengambil data emosi dari database
-    query = "SELECT * FROM emotions"
-    cursor = conn.cursor()
-    cursor.execute(query)
-    rows = cursor.fetchall()
-    return rows
+def create_table(conn):
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS emotions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            emotion TEXT
+        )
+    ''')
+    conn.commit()
+
+def insert_emotion(conn, timestamp, emotion):
+    conn.execute("INSERT INTO emotions (timestamp, emotion) VALUES (?, ?)", (timestamp, emotion))
+    conn.commit()

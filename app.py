@@ -1,54 +1,54 @@
 import streamlit as st
-from keras.models import load_model
+from PIL import Image
 import numpy as np
-from PIL import Image, ImageOps
 import cv2
+import tensorflow as tf
+from datetime import datetime
+from config import MODEL_PATH, DATABASE_PATH, IMAGE_SIZE
+from database import connect_db, create_table, insert_emotion
+from camera_utils import detect_emotion_live
+from config import MODEL_PATH, DATABASE_PATH, IMAGE_SIZE, LABELS
+from camera_utils import detect_emotion_live
+from keras.models import load_model
+from database import connect_db, create_table
+
+model = load_model(MODEL_PATH)
+conn = connect_db(DATABASE_PATH)
+create_table(conn)
+
+option = st.radio("Pilih metode input", ['📸 Kamera Langsung', '📁 Upload Gambar'])
+
+if option == '📸 Kamera Langsung':
+    detect_emotion_live(model, LABELS, conn)
+
 
 # Load model
-model = load_model("models/model_emosi.h5")
+model = tf.keras.models.load_model(MODEL_PATH)
+labels = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
 
+# Koneksi database
+conn = connect_db(DATABASE_PATH)
+create_table(conn)
 
-# Label emosi sesuai dataset
-labels = ['Marah', 'Jijik', 'Takut', 'Senang', 'Sedih', 'Kaget', 'Netral']
+st.title("😃 Deteksi Ekspresi Wajah")
 
-st.set_page_config(page_title="Deteksi Emosi Wajah", layout="centered")
-st.title("😊 Deteksi Emosi dari Wajah")
+option = st.radio("Pilih metode input", ['📸 Kamera Langsung', '📁 Upload Gambar'])
 
-uploaded_file = st.file_uploader("📤 Upload gambar wajah", type=["jpg", "png", "jpeg"])
+if option == '📁 Upload Gambar':
+    uploaded_file = st.file_uploader("Upload gambar wajah", type=["jpg", "jpeg", "png"])
+    if uploaded_file:
+        image = Image.open(uploaded_file).convert('L')
+        st.image(image, caption='Gambar yang Diupload', width=300)
 
-if uploaded_file is not None:
-    image = Image.open(uploaded_file).convert('L')  # Grayscale
-    st.image(image, caption='Gambar yang Diupload', width=300)
-    img = image.resize((48, 48))
-    img_array = np.array(img) / 255.0
-    img_array = img_array.reshape(1, 48, 48, 1)
+        img = np.array(image.resize(IMAGE_SIZE)) / 255.0
+        img_array = img.reshape(1, 48, 48, 1)
 
-    prediction = model.predict(img_array)
-    label_index = np.argmax(prediction)
-    emosi = labels[label_index]
+        predictions = model.predict(img_array)
+        label = labels[np.argmax(predictions)]
+        st.success(f"Ekspresi terdeteksi: **{label}**")
 
-    st.markdown(f"### 😃 Emosi Terdeteksi: **{emosi}**")
-    st.write("📊 Probabilitas Semua Emosi:")
-    for i in range(7):
-        st.write(f"- {labels[i]}: `{prediction[0][i]:.2f}`")
-import preprocess
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        insert_emotion(conn, timestamp, label)
 
-# Menggunakan fungsi untuk preprocessing gambar
-image = preprocess.preprocess_image("path_to_image.jpg")
-
-# Menggunakan fungsi untuk memuat dataset
-data = preprocess.load_data("data.csv")
-
-import database
-
-# Koneksi ke database
-conn = database.connect_db("emotion_database.db")
-
-# Mengambil data emosi
-emotions_data = database.fetch_emotions(conn)
-
-import config
-
-# Menggunakan nilai konfigurasi
-model_path = config.MODEL_PATH
-image_size = config.IMAGE_SIZE
+elif option == '📸 Kamera Langsung':
+    detect_emotion_live(model, labels, conn)
