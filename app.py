@@ -1,54 +1,71 @@
 import streamlit as st
-from PIL import Image
-import numpy as np
-import cv2
-import tensorflow as tf
-from datetime import datetime
-from config import MODEL_PATH, DATABASE_PATH, IMAGE_SIZE
-from database import connect_db, create_table, insert_emotion
-from camera_utils import detect_emotion_live
-from config import MODEL_PATH, DATABASE_PATH, IMAGE_SIZE, LABELS
-from camera_utils import detect_emotion_live
-from keras.models import load_model
+from config import MODEL_PATH, DATABASE_PATH, LABELS
 from database import connect_db, create_table
+from camera_utils import detect_emotion_live
+from tensorflow.keras.models import load_model
+import os
 
-model = load_model(MODEL_PATH)
+# Set konfigurasi halaman
+st.set_page_config(page_title="Emotion Detection App", layout="centered")
+st.title("📷 Deteksi Ekspresi Wajah Real-Time")
+
+# Cek dan load model hanya sekali
+if not os.path.exists(MODEL_PATH):
+    st.error(f"❌ Model tidak ditemukan di: {MODEL_PATH}")
+    st.stop()
+
+@st.cache_resource
+def load_emotion_model():
+    return load_model(MODEL_PATH)
+
+model = load_emotion_model()
+
+# Setup database
 conn = connect_db(DATABASE_PATH)
 create_table(conn)
 
-option = st.radio("Pilih metode input", ['📸 Kamera Langsung', '📁 Upload Gambar'])
+# Pilih metode input (pastikan key unik)
+input_method = st.radio(
+    "Pilih metode input:",
+    ["📸 Kamera Langsung", "📁 Upload Gambar"],
+    key="input_method_radio"
+)
 
-if option == '📸 Kamera Langsung':
-    detect_emotion_live(model, LABELS, conn)
+# Jika kamera dipilih
+if input_method == "📸 Kamera Langsung":
+    if 'run_camera' not in st.session_state:
+        st.session_state.run_camera = False
 
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Start Kamera", key="start_cam_btn"):
+            st.session_state.run_camera = True
+    with col2:
+        if st.button("Stop Kamera", key="stop_cam_btn"):
+            st.session_state.run_camera = False
 
-# Load model
-model = tf.keras.models.load_model(MODEL_PATH)
-labels = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
+    if st.session_state.run_camera:
+        st.success("✅ Kamera aktif. Deteksi emosi berjalan.")
+        detect_emotion_live(model, LABELS, conn)
+    else:
+        st.warning("⛔ Kamera tidak aktif.")
 
-# Koneksi database
-conn = connect_db(DATABASE_PATH)
-create_table(conn)
+# Jika upload gambar dipilih
+elif input_method == "📁 Upload Gambar":
+    uploaded_file = st.file_uploader("Upload gambar wajah", type=["jpg", "jpeg", "png"], key="uploader_key")
+    if uploaded_file is not None:
+        from PIL import Image
+        import numpy as np
+        import cv2
 
-st.title("😃 Deteksi Ekspresi Wajah")
+        image = Image.open(uploaded_file).convert("L")  # konversi ke grayscale
+        image = image.resize((48, 48))
+        image_array = np.array(image) / 255.0
+        image_array = image_array.reshape(1, 48, 48, 1)
 
-option = st.radio("Pilih metode input", ['📸 Kamera Langsung', '📁 Upload Gambar'])
+        prediction = model.predict(image_array)
+        label_index = np.argmax(prediction)
+        label = LABELS[label_index]
+        confidence = prediction[0][label_index]
 
-if option == '📁 Upload Gambar':
-    uploaded_file = st.file_uploader("Upload gambar wajah", type=["jpg", "jpeg", "png"])
-    if uploaded_file:
-        image = Image.open(uploaded_file).convert('L')
-        st.image(image, caption='Gambar yang Diupload', width=300)
-
-        img = np.array(image.resize(IMAGE_SIZE)) / 255.0
-        img_array = img.reshape(1, 48, 48, 1)
-
-        predictions = model.predict(img_array)
-        label = labels[np.argmax(predictions)]
-        st.success(f"Ekspresi terdeteksi: **{label}**")
-
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        insert_emotion(conn, timestamp, label)
-
-elif option == '📸 Kamera Langsung':
-    detect_emotion_live(model, labels, conn)
+        st.image(uploaded_file, caption=f"Prediksi: {label} ({confidence:.2%})", use_column_width=True)
